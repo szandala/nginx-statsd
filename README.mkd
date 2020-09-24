@@ -1,47 +1,59 @@
 nginx-statsd
 ============
-[![Build Status](https://travis-ci.org/trungtm/nginx-statsd.svg?branch=master)](https://travis-ci.org/trungtm/nginx-statsd)
 
-An nginx module for sending statistics to statsd.
+An Nginx module for sending statistics to statsd.
 
 This is how to use the nginx-statsd module:
 
-	http {
-		
-		# Set the server that you want to send stats to.
-		statsd_server your.statsd.server.com;
+```bash
+    http {
 
-		# Randomly sample 10% of requests so that you do not overwhelm your statsd server.
-		# Defaults to sending all statsd (100%). 
-		statsd_sample_rate 10; # 10% of requests
+        # Set the server that you want to send stats to.
+        statsd_server your.statsd.server.com;
+
+        # Randomly sample 10% of requests so that you do not overwhelm your statsd server.
+        # Defaults to sending all statsd (100%).
+        statsd_sample_rate 10; # 10% of requests
 
 
-		server {
-			listen 80;
-			server_name www.your.domain.com;
-				
-			# Increment "your_product.requests" by 1 whenever any request hits this server. 
-			statsd_count "your_product.requests" 1;
+        server {
+            listen 80;
+            server_name www.your.domain.com;
 
-			location / {
-				
-				# Increment the key by 1 when this location is hit.
-				statsd_count "your_product.pages.index_requests" 1;
+            # Increment "your_product.requests" by 1 whenever ANY request hits this server.
+            statsd_count "your_product.requests" 1;
 
-				# Increment the key by 1, but only if $request_completion is set to something.
-				statsd_count "your_product.pages.index_responses" 1 "$request_completion";
+            location / {
 
-				# Send a timing to "your_product.pages.index_response_time" equal to the value
-				# returned from the upstream server. If this value evaluates to empty-string
-				# it will not be sent. Thus, there is no need to add a test. 0 values are sent as timings since they are significant.
-				statsd_timing "your_product.pages.index_response_time" "$upstream_response_time";
+                # Increment the key by 1 when THIS location is hit.
+                statsd_count "your_product.pages.index_requests" 1;
 
-				# Increment a key based on the value of a custom header. Only sends the value if
-				# the custom header exists in the upstream response.
-				statsd_count "your_product.custom_$upstream_http_x_some_custom_header" 1 
-					"$upstream_http_x_some_custom_header";
+                # Increment the key by 1, but only if $request_completion is set to something.
+                statsd_count "your_product.pages.index_responses" 1 "$request_completion";
 
-				proxy_pass http://some.other.domain.com;
-			}
-		}
-	}
+                # Send a timing to "your_product.pages.index_response_time" equal to the value
+                # returned from the upstream server. If this value evaluates to empty-string
+                # it will not be sent. Thus, there is no need to add a test. 0 values are sent as timings since they are significant.
+                statsd_timing "your_product.pages.index_response_time" "$upstream_response_time";
+
+                # Gauges are a constant data type. They are not subject to averaging, and they don’t change unless you change them.
+                # That is, once you set a gauge value, it will be a flat line on the graph until you change it again.
+                # Gauges are useful for things that are already averaged, or don’t need to reset periodically.
+                # System load, for example, could be graphed with a gauge.
+                # You might use incr to count the number of logins to a system,
+                # but a gauge to track how many active WebSocket connections you have.
+                statsd_gauge "your_product.request_length" "$request_length";
+
+                # Telegraf compatible metric: coma separated list of values
+                statsd_count "logstash_nginx_status,uri=$uri,method=$request_method,status=$status,source=${HOSTNAME}" 1;
+
+                # Increment a key based on the value of a custom header. Only sends the value if
+                # the custom header exists in the upstream response.
+                statsd_count "your_product.custom_$upstream_http_x_some_custom_header" 1
+                    "$upstream_http_x_some_custom_header";
+
+                proxy_pass http://some.other.domain.com;
+            }
+        }
+    }
+```
