@@ -17,6 +17,7 @@
 
 #define STATSD_TYPE_COUNTER	0x0001
 #define STATSD_TYPE_TIMING  0x0002
+#define STATSD_TYPE_GAUGE	0x0003
 
 #define STATSD_MAX_STR 256
 
@@ -72,6 +73,7 @@ static char *ngx_http_statsd_merge_loc_conf(ngx_conf_t *cf, void *parent,
 static char *ngx_http_statsd_set_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_statsd_add_stat(ngx_conf_t *cf, ngx_command_t *cmd, void *conf, ngx_uint_t type);
 static char *ngx_http_statsd_add_count(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static char *ngx_http_statsd_add_gauge(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static char *ngx_http_statsd_add_timing(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
 static ngx_str_t ngx_http_statsd_key_get_value(ngx_http_request_t *r, ngx_http_complex_value_t *cv, ngx_str_t v);
@@ -104,6 +106,13 @@ static ngx_command_t  ngx_http_statsd_commands[] = {
 	{ ngx_string("statsd_count"),
 	  NGX_HTTP_SRV_CONF|NGX_HTTP_SIF_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_TAKE23,
 	  ngx_http_statsd_add_count,
+	  NGX_HTTP_LOC_CONF_OFFSET,
+	  0,
+	  NULL },
+
+    { ngx_string("statsd_gauge"),
+	  NGX_HTTP_SRV_CONF|NGX_HTTP_SIF_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_TAKE23,
+	  ngx_http_statsd_add_gauge,
 	  NGX_HTTP_LOC_CONF_OFFSET,
 	  0,
 	  NULL },
@@ -165,7 +174,7 @@ ngx_http_statsd_key_get_value(ngx_http_request_t *r, ngx_http_complex_value_t *c
 };
 
 static ngx_str_t
-ngx_http_statsd_key_value(ngx_str_t *value) 
+ngx_http_statsd_key_value(ngx_str_t *value)
 {
 	return *value;
 };
@@ -186,7 +195,7 @@ ngx_http_statsd_metric_get_value(ngx_http_request_t *r, ngx_http_complex_value_t
 };
 
 static ngx_uint_t
-ngx_http_statsd_metric_value(ngx_str_t *value) 
+ngx_http_statsd_metric_value(ngx_str_t *value)
 {
 	ngx_int_t n, m;
 
@@ -198,8 +207,8 @@ ngx_http_statsd_metric_value(ngx_str_t *value)
 	if (value->len > 4 && value->data[value->len - 4] == '.') {
 		n = ngx_atoi(value->data, value->len - 4);
 		m = ngx_atoi(value->data + (value->len - 3), 3);
-		return (ngx_uint_t) ((n * 1000) + m); 
-    	
+		return (ngx_uint_t) ((n * 1000) + m);
+
 	} else {
 		n = ngx_atoi(value->data, value->len);
 		if (n > 0) {
@@ -226,7 +235,7 @@ ngx_http_statsd_valid_get_value(ngx_http_request_t *r, ngx_http_complex_value_t 
 };
 
 static ngx_flag_t
-ngx_http_statsd_valid_value(ngx_str_t *value) 
+ngx_http_statsd_valid_value(ngx_str_t *value)
 {
 	return (ngx_flag_t) (value->len > 0 ? 1 : 0);
 };
@@ -280,6 +289,8 @@ ngx_http_statsd_handler(ngx_http_request_t *r)
 			metric_type = "c";
 		} else if (stat.type == STATSD_TYPE_TIMING) {
 			metric_type = "ms";
+		} else if (stat.type == STATSD_TYPE_GAUGE) {
+			metric_type = "g";
 		} else {
 			metric_type = NULL;
 		}
@@ -525,11 +536,11 @@ ngx_http_statsd_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
 	if (conf->stats == NULL) {
 		sz = (prev->stats != NULL ? prev->stats->nelts : 2);
-		conf->stats = ngx_array_create(cf->pool, sz, sizeof(ngx_statsd_stat_t)); 
+		conf->stats = ngx_array_create(cf->pool, sz, sizeof(ngx_statsd_stat_t));
 		if (conf->stats == NULL) {
         	return NGX_CONF_ERROR;
 		}
-	} 
+	}
 	if (prev->stats != NULL) {
 		prev_stats = prev->stats->elts;
 		for (i = 0; i < prev->stats->nelts; i++) {
@@ -718,13 +729,19 @@ ngx_http_statsd_add_stat(ngx_conf_t *cf, ngx_command_t *cmd, void *conf, ngx_uin
 		}
 	}
 
-	return NGX_CONF_OK; 
+	return NGX_CONF_OK;
 }
 
 static char *
 ngx_http_statsd_add_count(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
 	return ngx_http_statsd_add_stat(cf, cmd, conf, STATSD_TYPE_COUNTER);
+}
+
+static char *
+ngx_http_statsd_add_gauge(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+	return ngx_http_statsd_add_stat(cf, cmd, conf, STATSD_TYPE_GAUGE);
 }
 
 static char *
